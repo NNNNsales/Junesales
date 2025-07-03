@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Honeymee Multi-Store Sales Dashboard - June 2025</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 1.5rem;
+            background-color: #ffffff;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+        }
+        h1, h2 {
+            color: #1f2937;
+            font-weight: 700; /* font-bold */
+        }
+        .chart-container {
+            position: relative;
+            height: 400px; /* Fixed height for consistency */
+            width: 100%;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background-color: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .llm-output-container {
+            background-color: #f0fdf4; /* bg-green-50 */
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-top: 2rem;
+            border: 1px solid #dcfce7; /* border-green-200 */
+        }
+        .llm-output-container p {
+            color: #166534; /* text-green-800 */
+            line-height: 1.6;
+        }
+        .llm-output-container h3 {
+            color: #166534; /* text-green-800 */
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        .loading-indicator {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+            font-style: italic;
+            color: #6b7280;
+        }
+        .interactive-guide {
+            text-align: center;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            background-color: #eef2ff; /* bg-indigo-50 */
+            color: #4338ca; /* text-indigo-800 */
+            border-radius: 0.5rem;
+            font-weight: 500;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 1rem;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl mb-6 text-center">Honeymee Multi-Store Sales Dashboard - June 2025</h1>
+
+        <!-- Overall Sales Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-blue-50 p-6 rounded-xl shadow-md">
+                <p class="text-sm font-medium text-blue-600">Total Gross Sales</p>
+                <p class="text-2xl font-bold text-blue-800 mt-1" id="totalOverallSales">$278,528.00</p>
+            </div>
+            <div class="bg-green-50 p-6 rounded-xl shadow-md">
+                <p class="text-sm font-medium text-green-600">Average Daily Sales</p>
+                <p class="text-2xl font-bold text-green-800 mt-1" id="avgDailySales">$9,284.27</p>
+            </div>
+            <div class="bg-yellow-50 p-6 rounded-xl shadow-md">
+                <p class="text-sm font-medium text-yellow-600">Highest Daily Sales</p>
+                <p class="text-2xl font-bold text-yellow-800 mt-1" id="highestDailySales">$15,700.00</p>
+                <p class="text-xs text-yellow-700 mt-1" id="highestDailySalesDate">on 2025-06-15</p>
+            </div>
+            <div class="bg-red-50 p-6 rounded-xl shadow-md">
+                <p class="text-sm font-medium text-red-600">Lowest Daily Sales</p>
+                <p class="text-2xl font-bold text-red-800 mt-1" id="lowestDailySales">$4,000.00</p>
+                <p class="text-xs text-red-700 mt-1" id="lowestDailySalesDate">on 2025-06-10</p>
+            </div>
+        </div>
+
+        <!-- Daily Sales Trend Chart by Store -->
+        <h2 class="text-2xl mb-4">Daily Sales Trend by Store</h2>
+        <div class="chart-container">
+            <canvas id="dailySalesByStoreChart"></canvas>
+        </div>
+
+        <!-- Interactive Guide -->
+        <div class="interactive-guide">
+            <strong>Click the tool bar:</strong> to highlight its trend in the line chart above.
+        </div>
+        
+        <!-- Total Sales by Store Chart -->
+        <h2 class="text-2xl mb-4">Total Sales by Store</h2>
+        <div class="chart-container">
+            <canvas id="totalSalesByStoreChart"></canvas>
+        </div>
+
+        <!-- Gemini API Feature: Sales Trend Analysis -->
+        <div class="mb-8 mt-8">
+            <button id="analyzeSalesBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                ✨ Get Multi-Store Sales Analysis
+            </button>
+            <div id="loadingIndicator" class="loading-indicator mt-2">Generating insights...</div>
+            <div id="salesAnalysisOutput" class="llm-output-container hidden">
+                <h3>Multi-Store Sales Insights from Gemini:</h3>
+                <p id="analysisText"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data parsed from the uploaded CSV
+        const rawCsvData = `Date,JV,BP,DTLA,GARDENA,IRVINE,WILSHIRE
+2025-06-01,2976.3,1835.65,558,4178.45,2647.1,2678.3
+2025-06-02,1638,1162.25,374,2078.7,1521.9,1577.75
+2025-06-03,1070.25,631.25,395.5,1674.15,1315.75,1292.5
+2025-06-04,1046.95,820.5,341.25,1867.3,1560.3,1385.95
+2025-06-05,944.7,1253.5,322.5,929.2,1886.95,1498.25
+2025-06-06,1496.75,1591,298.25,2979.35,2332.15,2065.35
+2025-06-07,2542.45,1577,353.5,3316.1,2331.65,2337.7
+2025-06-08,764.25,1996.2,451.75,3276.8,2776,1864.74
+2025-06-09,135.25,859.75,111.25,1995.25,1411.8,1421
+2025-06-10,0,1078.5,0,2186.15,1627.85,1239.19
+2025-06-11,0,1083.25,0,2107.2,1768.15,1502.4
+2025-06-12,0,1029,0,2825.8,1832.75,1830.85
+2025-06-13,513.25,1443.9,199.25,3331,2422.9,2057.25
+2025-06-14,1558.25,2312.25,466.25,2861.75,2313.3,1315.35
+2025-06-15,568,2538.75,288.25,4658.05,3107.45,2259.7
+2025-06-16,444.25,870,420.75,2166.25,1447.65,1930.95
+2025-06-17,407.25,847.95,135.75,2117.05,1871.65,1646.9
+2025-06-18,748.25,1023.75,433,2353.6,2130.8,1760.35
+2025-06-19,1008.7,1284.95,285.5,2825.1,1946.25,1777.34
+2025-06-20,1431.1,1823.7,398.75,3050.8,2581.35,1840.75
+2025-06-21,1580.5,1887.75,477.25,3300.7,2183,2323.3
+2025-06-22,1495.85,1769.75,358.25,3996.1,2744.25,2044
+2025-06-23,1237.5,889.75,339.75,2308.3,1432.25,1482.45
+2025-06-24,703,936,329.75,2306.3,1547.05,1186.75
+2025-06-25,1107.6,1130.75,306,2101.3,1530.65,1460.6
+2025-06-26,1010.3,919.35,346.5,1983.9,1532.55,1540.03
+2025-06-27,1441.6,1600.5,385,3070.6,2311.2,1861.3
+2025-06-28,2390.8,1781.75,347,2558.75,2304.95,2022.1
+2025-06-29,2290.22,1750.25,759.25,3520.05,2622.2,2231.2
+2025-06-30,1311.75,1004.25,274.75,2203.6,1921.25,1443.49
+Total,33863.069999999992,40733.200000000004,9757,80127.650000000009,60963.05,52877.789999999994`;
+
+        let dates = [];
+        let storeNames = [];
+        let dailySalesByStore = {};
+        let totalSalesByStore = {};
+        let dailyTotalSales = [];
+        let highlightedStore = null;
+
+        const originalBorderColors = [
+            'rgba(255, 99, 132, 1)', 'rgba(54, 162, 235, 1)', 'rgba(255, 206, 86, 1)',
+            'rgba(75, 192, 192, 1)', 'rgba(153, 102, 255, 1)', 'rgba(255, 159, 64, 1)'
+        ];
+
+        // --- CSV Parsing Function ---
+        function parseMultiStoreCsv(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim() !== '');
+            storeNames = lines[0].split(',').slice(1).map(s => s.trim());
+            dates = [];
+            dailySalesByStore = {};
+            storeNames.forEach(store => dailySalesByStore[store] = []);
+            dailyTotalSales = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line.toLowerCase().startsWith('total')) {
+                    const totalValues = line.split(',').map(s => parseFloat(s.trim()) || 0);
+                    storeNames.forEach((store, index) => {
+                        totalSalesByStore[store] = totalValues[index + 1];
+                    });
+                    continue;
+                }
+
+                const values = line.split(',').map(s => s.trim());
+                dates.push(values[0]);
+
+                let currentDayTotal = 0;
+                storeNames.forEach((store, index) => {
+                    const sales = parseFloat(values[index + 1]) || 0;
+                    dailySalesByStore[store].push(sales);
+                    currentDayTotal += sales;
+                });
+                dailyTotalSales.push(currentDayTotal);
+            }
+        }
+
+        // --- Initialize Data and Charts on Load ---
+        function initializeDashboard() {
+            parseMultiStoreCsv(rawCsvData);
+            updateSummaryCards();
+            renderDailySalesByStoreChart();
+            renderTotalSalesByStoreChart();
+        }
+
+        // --- Update Summary Cards ---
+        function updateSummaryCards() {
+            const overallTotal = dailyTotalSales.reduce((sum, val) => sum + val, 0);
+            const averageDaily = overallTotal / dailyTotalSales.length;
+            document.getElementById('totalOverallSales').textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(overallTotal);
+            document.getElementById('avgDailySales').textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(averageDaily);
+
+            const maxDailySales = Math.max(...dailyTotalSales);
+            const maxDailySalesIndex = dailyTotalSales.indexOf(maxDailySales);
+            document.getElementById('highestDailySales').textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(maxDailySales);
+            document.getElementById('highestDailySalesDate').textContent = `on ${dates[maxDailySalesIndex]}`;
+
+            const minDailySales = Math.min(...dailyTotalSales);
+            const minDailySalesIndex = dailyTotalSales.indexOf(minDailySales);
+            document.getElementById('lowestDailySales').textContent = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(minDailySales);
+            document.getElementById('lowestDailySalesDate').textContent = `on ${dates[minDailySalesIndex]}`;
+        }
+
+        // --- Render Daily Sales by Store Chart (Line Chart) ---
+        let dailySalesByStoreChartInstance;
+        function renderDailySalesByStoreChart() {
+            if (dailySalesByStoreChartInstance) {
+                dailySalesByStoreChartInstance.destroy();
+            }
+            const datasets = storeNames.map((store, index) => ({
+                label: store,
+                data: dailySalesByStore[store],
+                borderColor: originalBorderColors[index % originalBorderColors.length],
+                borderWidth: 2,
+                tension: 0.1,
+                fill: false
+            }));
+            const ctx = document.getElementById('dailySalesByStoreChart').getContext('2d');
+            dailySalesByStoreChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels: dates, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        tooltip: { mode: 'index', intersect: false, callbacks: { label: (c) => `${c.dataset.label}: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c.parsed.y)}` } }
+                    },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Sales ($)' } }, x: { title: { display: true, text: 'Date' } } }
+                }
+            });
+        }
+
+        // --- Render Total Sales by Store Chart (Bar Chart) ---
+        let totalSalesByStoreChartInstance;
+        function renderTotalSalesByStoreChart() {
+            if (totalSalesByStoreChartInstance) {
+                totalSalesByStoreChartInstance.destroy();
+            }
+            const ctx = document.getElementById('totalSalesByStoreChart').getContext('2d');
+            totalSalesByStoreChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(totalSalesByStore),
+                    datasets: [{
+                        label: 'Total Sales by Store (June 2025)',
+                        data: Object.values(totalSalesByStore),
+                        backgroundColor: originalBorderColors.map(color => color.replace('1)', '0.6)')),
+                        borderColor: originalBorderColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    onClick: handleChartClick,
+                    plugins: {
+                        tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(c.parsed.y)}` } }
+                    },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: 'Total Sales ($)' } }, x: { title: { display: true, text: 'Store' } } }
+                }
+            });
+        }
+        
+        // --- Handle Clicks on Bar Chart for Interactivity ---
+        function handleChartClick(event, elements) {
+            if (elements.length > 0) {
+                const clickedStoreIndex = elements[0].index;
+                const storeName = totalSalesByStoreChartInstance.data.labels[clickedStoreIndex];
+                
+                if (highlightedStore === storeName) {
+                    // If the same store is clicked again, reset the view
+                    resetDailySalesChart();
+                } else {
+                    // Highlight the new store
+                    highlightStore(storeName);
+                }
+            } else {
+                // If the background is clicked, reset the view
+                resetDailySalesChart();
+            }
+        }
+        
+        // --- Highlight a Specific Store's Line ---
+        function highlightStore(storeName) {
+            highlightedStore = storeName;
+            dailySalesByStoreChartInstance.data.datasets.forEach((dataset, index) => {
+                if (dataset.label === storeName) {
+                    dataset.borderColor = originalBorderColors[index % originalBorderColors.length];
+                    dataset.borderWidth = 4; // Make the line thicker
+                } else {
+                    dataset.borderColor = 'rgba(200, 200, 200, 0.3)'; // Fade out other lines
+                    dataset.borderWidth = 1;
+                }
+            });
+            dailySalesByStoreChartInstance.update();
+        }
+        
+        // --- Reset the Line Chart to Default View ---
+        function resetDailySalesChart() {
+            highlightedStore = null;
+            dailySalesByStoreChartInstance.data.datasets.forEach((dataset, index) => {
+                dataset.borderColor = originalBorderColors[index % originalBorderColors.length];
+                dataset.borderWidth = 2; // Reset to default thickness
+            });
+            dailySalesByStoreChartInstance.update();
+        }
+
+        // --- Gemini API Integration for Sales Trend Analysis ---
+        document.getElementById('analyzeSalesBtn').addEventListener('click', async () => {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const salesAnalysisOutput = document.getElementById('salesAnalysisOutput');
+            const analysisText = document.getElementById('analysisText');
+
+            loadingIndicator.style.display = 'block';
+            salesAnalysisOutput.classList.add('hidden');
+            analysisText.textContent = '';
+
+            let salesDataString = 'Daily Sales Data for Multiple Stores (June 2025):\n';
+            salesDataString += `Date,${storeNames.join(',')},Daily Total\n`;
+            dates.forEach((date, dateIndex) => {
+                const storeSales = storeNames.map(store => dailySalesByStore[store][dateIndex].toFixed(2));
+                salesDataString += `${date},${storeSales.join(',')},${dailyTotalSales[dateIndex].toFixed(2)}\n`;
+            });
+            salesDataString += `\nTotal Sales by Store:\n`;
+            for (const store of storeNames) {
+                salesDataString += `${store}: $${totalSalesByStore[store].toFixed(2)}\n`;
+            }
+
+            const prompt = `Analyze the following multi-store daily sales data for June 2025. Identify overall sales trends, compare performance between stores, highlight peak and low performing days/stores, and provide actionable insights or observations.`;
+
+            try {
+                let chatHistory = [{ role: "user", parts: [{ text: prompt }, {text: salesDataString }] }];
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // Leave as empty string for Canvas
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
+                    analysisText.textContent = result.candidates[0].content.parts[0].text;
+                } else {
+                    analysisText.textContent = 'Error: Could not retrieve analysis. Please check the API response.';
+                    console.error('Unexpected API response structure:', result);
+                }
+            } catch (error) {
+                analysisText.textContent = `Error calling Gemini API: ${error.message}`;
+                console.error('Error during API call:', error);
+            } finally {
+                salesAnalysisOutput.classList.remove('hidden');
+                loadingIndicator.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', initializeDashboard);
+    </script>
+</body>
+</html>
